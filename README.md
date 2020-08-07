@@ -3,37 +3,37 @@ https://readme42.com
 -->
 
 
-[![](https://img.shields.io/pypi/v/django-bookmark-base.svg?maxAge=3600)](https://pypi.org/project/django-bookmark-base/)
+[![](https://img.shields.io/pypi/v/django-watch-base.svg?maxAge=3600)](https://pypi.org/project/django-watch-base/)
 [![](https://img.shields.io/badge/License-Unlicense-blue.svg?longCache=True)](https://unlicense.org/)
-[![](https://github.com/andrewp-as-is/django-bookmark-base.py/workflows/tests42/badge.svg)](https://github.com/andrewp-as-is/django-bookmark-base.py/actions)
+[![](https://github.com/andrewp-as-is/django-watch-base.py/workflows/tests42/badge.svg)](https://github.com/andrewp-as-is/django-watch-base.py/actions)
 
 ### Installation
 ```bash
-$ [sudo] pip install django-bookmark-base
+$ [sudo] pip install django-watch-base
 ```
 
 ##### `settings.py`
 ```python
-INSTALLED_APPS+=['django_bookmark_base']
+INSTALLED_APPS+=['django_watch_base']
 ```
 
 ##### `models.py`
 ```python
 from django.db import models
-from django_bookmark_base.models import BookmarkModel
+from django_watch_base.models import WatchModel
 
-class CollectionBookmark(BookmarkModel):
+class CollectionWatch(WatchModel):
     obj = models.ForeignKey(
-        'Collection', related_name="bookmark_set", on_delete=models.CASCADE)
+        'Collection', related_name="watch_set", on_delete=models.CASCADE)
 
     class Meta:
         unique_together = [('obj', 'created_by')]
 
 class Collection(models.Model):
-    bookmarks_count = models.IntegerField(default=0) # use triggers
+    watchers_count = models.IntegerField(default=0) # use triggers
 
-    def get_bookmark_url(self):
-        return 'bookmark/collection/%s' % self.pk
+    def get_watch_url(self):
+        return '/watch/collection/%s' % self.pk
 ```
 
 ##### `urls.py`
@@ -43,66 +43,65 @@ from django.urls import include, path
 import views
 
 urlpatterns = [
-    path('bookmark/collection/<int:pk>',
-         views.CollectionBookmarkToggleView.as_view(), name='collection'),
+    path('/watch/collection/<int:pk>',views.ToggleView.as_view()),
 ]
 ```
 
 ##### `views.py`
-`DetailView` - context variables `{{ bookmark_obj }}` and `{{ bookmark }}`
+`DetailView` - context variables `{{ watch_obj }}` and `{{ watch }}`
 ```python
-from apps.collections.models import Collection, CollectionBookmark
-from django_bookmark_base.views import BookmarkViewMixin
+from apps.collections.models import Collection, CollectionWatch
+from django_watch_base.views import WatchViewMixin
 
-class CollectionDetailView(BookmarkViewMixin):
-    bookmark_model = CollectionBookmark
+class CollectionDetailView(WatchViewMixin):
+    watch_model = CollectionWatch
 ```
 
 `XMLHttpRequest` view
 ```python
-from django_bookmark_base.views import BookmarkToggleView
-from apps.collections.models import Collection, CollectionBookmark
+from django_watch_base.views import WatchToggleView
+from apps.collections.models import Collection, CollectionWatch
 
-class CollectionBookmarkToggleView(BookmarkToggleView):
-    bookmark_model = CollectionBookmark
+class ToggleView(WatchToggleView):
+    watch_model = CollectionWatch
 
     def get_data(self):
         collection = Collection.objects.get(pk=self.kwargs['pk'])
         return {
-            'bookmarked': self.bookmarked,
-            'bookmarks_count': collection.bookmarks_count
+            'is_watching': self.is_watching,
+            'watchers_count': collection.watchers_count
         }
 ```
 
-`ListView` prefetch user bookmarks
+`ListView` prefetch user watch
 ```python
 from django.db.models import Prefetch
 from django.views.generic.list import ListView
-from apps.collections.models import Collection, CollectionBookmark
+from apps.collections.models import Collection, CollectionWatch
 
 class CollectionListView(ListView):
     def get_queryset(self, **kwargs):
         qs = Collection.objects.all()
         if self.request.user.is_authenticated:
             qs = qs.prefetch_related(
-                Prefetch("bookmark_set", queryset=CollectionBookmark.objects.filter(created_by=self.request.user),to_attr='bookmarks')
+                Prefetch("watch_set", queryset=CollectionWatch.objects.filter(created_by=self.request.user),to_attr='watching')
             )
         return qs
 ```
 
 ##### Templates
 ```html
-<a data-id="{{ bookmark_obj.pk }}" class="btn bookmark-btn {% if bookmark %}selected{% endif %}" {% if request.user.is_authenticated %}data-href="{{ bookmark_obj.get_bookmark_url }}"{% else %}href="{% url 'login' %}?next={{ request.path }}"{% endif %}>
+<a data-id="{{ watch_obj.pk }}" class="btn watch-btn {% if watch %}selected{% endif %}" {% if request.user.is_authenticated %}data-href="{{ watch_obj.get_watch_url }}"{% else %}href="{% url 'login' %}?next={{ request.path }}"{% endif %}>
 </a>
-<a data-id="{{ bookmark_obj.pk }}" class="bookmark-count">{{ bookmark_obj.bookmarks_count }}</a>
+<a data-id="{{ watch_obj.pk }}" class="watch-count">{{ watch_obj.watchers_count }}</a>
 ```
 
 ##### JavaScript
 ```javascript
-function bookmark_toggle(btn) {
+function toggle_watch(btn) {
     data_id = btn.getAttribute('data-id');
 
-    var bookmark_count = document.querySelector(".bookmark-count[data-id='"+data_id+"']");
+    var watch_count = document.querySelector(".watch-count[data-id='"+data_id+"']");
 
     var xhr = new XMLHttpRequest();
     xhr.open('GET', btn.getAttribute('data-href'));
@@ -113,8 +112,8 @@ function bookmark_toggle(btn) {
             console. error(`Error ${xhr.status}: ${xhr.statusText}`);
         }
         if (xhr.status == 200) {
-            bookmark_count.innerHTML=xhr.response.bookmarks_count;
-            if (xhr.response.bookmarked) {
+            bookmark_count.innerHTML=xhr.response.watchers_count;
+            if (xhr.response.is_watching) {
                 btn.classList.add('text-green');
             } else {
                 btn.classList.remove('text-green');
@@ -125,12 +124,12 @@ function bookmark_toggle(btn) {
 }
 
 document.addEventListener("DOMContentLoaded", function(event) {
-const bookmark_buttons = document.querySelectorAll(".bookmark-btn");
-for (const btn of bookmark_buttons) {
+const watch_buttons = document.querySelectorAll(".watch-btn");
+for (const btn of watch_buttons) {
     if (btn.hasAttribute('data-href')) {
         btn.addEventListener('click', function(event){
             event.preventDefault();
-            bookmark_toggle(btn);
+            toggle_watch(btn);
         });
     }
 }
